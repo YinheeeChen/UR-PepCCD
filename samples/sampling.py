@@ -1,5 +1,5 @@
 import sys
-sys.path.append("/home2/yyzhou/PepCCD")
+sys.path.append("/workspace/guest/cyh/workspace/PepCCD")
 import argparse
 import os
 import torch
@@ -17,6 +17,18 @@ from utils.script_utils import (
     args_to_dict,
 )
 
+
+class UncertaintyHead(nn.Module):
+    def __init__(self, input_dim=640):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.SiLU(),
+            nn.Linear(128, 1),
+            nn.Sigmoid()
+        )
+    def forward(self, x):
+        return self.net(x)
 
 
 class PretainedTokenizer():
@@ -66,7 +78,7 @@ class PretainedTokenizer():
 def main():
     start_time = time.perf_counter()
     args = create_argparser().parse_args()
-    device = ('cuda:4' if th.cuda.is_available() else 'cpu')
+    device = os.environ.get("PEPCCD_DEVICE", "cuda" if th.cuda.is_available() else "cpu")
 
     print("creating model and diffusion...")
 
@@ -94,11 +106,21 @@ def main():
     prot_encoder.load_state_dict(torch.load(args.prot_encoder_path,weights_only=True))
     prot_tokenizer = PretainedTokenizer()
 
+    uncertainty_head = UncertaintyHead(input_dim=640).to(device)
+    if os.path.exists(args.uncertainty_head_path):
+        uncertainty_head.load_state_dict(
+            torch.load(args.uncertainty_head_path, map_location=device, weights_only=True)
+        )
+        print(f"loaded uncertainty head from {args.uncertainty_head_path}")
+    else:
+        print(f"warning: {args.uncertainty_head_path} not found, using randomly initialized uncertainty head")
+    uncertainty_head.eval()
 
-    def model_fn(inputs_embeds, timesteps, reference=None):
+
+    def model_fn(inputs_embeds, timesteps, reference=None, u_score=None):
         assert reference is not None
 
-        return model(inputs_embeds=inputs_embeds, timesteps=timesteps, self_condition=reference[0])
+        return model(inputs_embeds=inputs_embeds, timesteps=timesteps, self_condition=reference[0], u_score=u_score)
 
 
     print("sampling...")
@@ -115,6 +137,12 @@ def main():
             model_kwargs = {}
 
             prot_z = prot_encoder(prot).to(device)
+
+            # --- [UR-PepCCD: 计算 u_score] ---
+            u_score = uncertainty_head(prot_z) 
+            u_score = u_score.repeat(args.batch_size, 1).to(device) # 匹配 batch_size
+            model_kwargs["u_score"] = u_score # 塞进 kwargs 里传给扩散模型
+            # --- [UR-PepCCD 结束] ---
 
             prot_z = prot_z.repeat(args.batch_size, 1).to(device)
             ref_prot = prot_z / prot_z.norm(dim=-1, keepdim=True)
@@ -172,7 +200,8 @@ def create_argparser():
         use_ddim=False,
         sample_path="./samples",
         prior_path="./checkpoints/Fine_Diffusion/diffusion_model.pt",
-        model_path="./checkpoints/Fine_Diffusion/diffusion_model.pt",
+        model_path="./checkpoints/UR_PepCCD_MoE/rl_finetuned_diffusion.pt",
+        uncertainty_head_path="./checkpoints/UR_PepCCD_MoE/rl_uncertainty_head.pt",
         pep_encoder_path="./checkpoints/Align/best_pep.pth",
         prot_encoder_path="./checkpoints/Align/best_prot.pth",
         min_length=0,    

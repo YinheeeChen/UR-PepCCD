@@ -43,7 +43,8 @@ class CompoundDataset(Dataset):
 def load_data(encoder, seq_len, tag, args):
     pep_tokenizer = encoder.tokenizer
     if tag == 'train':
-        path = './dataset/Pre_Diffusion/pre_trained_sequence.jsonl'
+        # path = './dataset/Pre_Diffusion/pre_trained_sequence.jsonl' # stage2
+        path = './dataset/Fine_Diffusion/pepflow_fine_sequence.jsonl' # stage3
     else:
         raise ValueError()
     sentence = {'src': [], 'trg': []}

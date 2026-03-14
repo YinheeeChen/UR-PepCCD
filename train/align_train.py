@@ -1,5 +1,5 @@
 import sys
-sys.path.append("/home2/yyzhou/PepCCD")
+sys.path.append("/workspace/guest/cyh/workspace/PepCCD")
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

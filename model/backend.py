@@ -278,6 +278,8 @@ class ProGenBlock(nn.Module):
         self.ln_1 = nn.LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
         self.attn = ProGenAttention(config)
         self.mlp = ProGenMLP(inner_dim, config)
+        self.mlp_robust = ProGenMLP(inner_dim, config)
+
         self.time_embedding = nn.Sequential(
             nn.Linear(config.n_embd, config.n_embd),
             nn.SiLU(),
@@ -292,6 +294,7 @@ class ProGenBlock(nn.Module):
         use_cache=False,
         output_attentions=False,
         timesteps=None,
+        u_score=None,
     ):
         residual = hidden_states
         if timesteps is not None:
@@ -309,7 +312,17 @@ class ProGenBlock(nn.Module):
         attn_output = attn_outputs[0]  # output_attn: a, present, (attentions)
         outputs = attn_outputs[1:]
 
-        feed_forward_hidden_states = self.mlp(hidden_states)
+        # feed_forward_hidden_states = self.mlp(hidden_states)
+        ff_spec = self.mlp(hidden_states)
+        
+        if u_score is not None:
+            ff_rob = self.mlp_robust(hidden_states)
+            # u_score 通常是 [Batch_size] 大小，需要 reshape 成 [Batch, 1, 1] 才能和 hidden_states 广播相乘
+            u_score_view = u_score.view(-1, 1, 1).to(hidden_states.device)
+            # 融合公式: (1-u)*Spec + u*Rob
+            feed_forward_hidden_states = (1.0 - u_score_view) * ff_spec + u_score_view * ff_rob
+        else:
+            feed_forward_hidden_states = ff_spec
         hidden_states = attn_output + feed_forward_hidden_states + residual
 
         if use_cache:
@@ -425,6 +438,7 @@ class ProGenModel(ProGenPreTrainedModel):
         input_ids=None,
         timesteps=None,
         self_condition=None,
+        u_score=None,
         past_key_values=None,
         attention_mask=None,
         token_type_ids=None,
@@ -578,6 +592,7 @@ class ProGenModel(ProGenPreTrainedModel):
                     use_cache=use_cache,
                     output_attentions=output_attentions,
                     timesteps=timesteps,
+                    u_score=u_score,
                 )
 
             hidden_states = outputs[0]
@@ -691,6 +706,7 @@ class ProGenForCausalLM(ProGenPreTrainedModel):
         input_ids=None,
         timesteps=None,
         self_condition=None,
+        u_score=None,
         past_key_values=None,
         attention_mask=None,
         token_type_ids=None,
@@ -714,6 +730,7 @@ class ProGenForCausalLM(ProGenPreTrainedModel):
             input_ids,
             timesteps=timesteps,
             self_condition=self_condition,
+            u_score=u_score,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,

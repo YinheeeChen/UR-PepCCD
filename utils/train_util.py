@@ -16,6 +16,19 @@ import torch.nn as nn
 
 INITIAL_LOG_LOSS_SCALE = 20.0
 
+class UncertaintyHead(nn.Module):
+    def __init__(self, input_dim=640): # ESM2-150M 的输出维度通常是 320 或 640，根据实际情况确认
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.SiLU(),
+            nn.Linear(128, 1),
+            nn.Sigmoid() # 将输出压缩到 0~1 之间，完美契合概率 u
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
 
 class TrainLoop:
     def __init__(
@@ -93,8 +106,13 @@ class TrainLoop:
             self.pep_encoder = pep_encoder
             self.pep_encoder.eval()
         if prot_encoder is not None:
-            self.prot_encoder = pep_encoder
+            self.prot_encoder = prot_encoder
             self.prot_encoder.eval()
+
+        self.uncertainty_head = UncertaintyHead(input_dim=640).to(self.device)
+        self.opt.add_param_group(
+            {"params": self.uncertainty_head.parameters(), "lr": self.lr, "weight_decay": self.weight_decay}
+        )
 
        
 
@@ -130,6 +148,9 @@ class TrainLoop:
         for i in range(0, batch.shape[0], self.microbatch):
             micro = batch[i: i + self.microbatch].clone().to(self.device)
             micro_cond = {}
+
+            current_prot_features = None
+
             for k, v in cond.items():
                 if k == 'input_ids':
                     micro_cond[k] = v[i: i + self.microbatch].to(self.device)
@@ -143,9 +164,15 @@ class TrainLoop:
                             for seq in protein_sequences
                         ]
                         prot_features = self.prot_encoder(decoded_sequences) 
+                        current_prot_features = prot_features
                         prot_features_norm = prot_features / prot_features.norm(dim=-1,keepdim=True) 
                         prot_features_norm = prot_features_norm.unsqueeze(1).repeat(1, 256, 1)  
                         micro_cond['self_condition'] = prot_features_norm
+
+            if current_prot_features is not None:
+                # detach() 是为了确保梯度不会继续回传到已冻结的 ESM 编码器里报错
+                u_score = self.uncertainty_head(current_prot_features.detach())
+                micro_cond['u_score'] = u_score
             
             last_batch = (i + self.microbatch) >= batch.shape[0]
             t, weights = self.schedule_sampler.sample(micro.shape[0], self.device)
@@ -200,6 +227,9 @@ class TrainLoop:
         save_checkpoint(0, self.mp_trainer.master_params)
         for rate, params in zip(self.ema_rate, self.ema_params):
             save_checkpoint(rate, params)
+        uncertainty_path = bf.join(self.save_dir, "uncertainty_head.pt")
+        with bf.BlobFile(uncertainty_path, "wb") as f:
+            th.save(self.uncertainty_head.state_dict(), f)
 
 
 

@@ -1,4 +1,4 @@
-# MMCD Multi-Model Contrastive Diffusion
+# UR-PepCCD
 
 ####  Codes, datasets and appendix for AAAI-2026 paper "PepCCD: A Contrastive Conditioned Diffusion Framework for Target-Specific Peptide Generation"
 

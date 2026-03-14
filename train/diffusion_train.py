@@ -1,7 +1,8 @@
 import sys
-sys.path.append("/home2/yyzhou/PepCCD")
+sys.path.append("/workspace/guest/cyh/workspace/PepCCD")
 
 import argparse
+import os
 import torch.cuda
 import torch.multiprocessing as mp
 from train.align_train import ESMModel
@@ -21,14 +22,14 @@ def main():
     
 
     args = create_argparser().parse_args()
-    device = ('cuda:7' if torch.cuda.is_available() else 'cpu')
+    device = os.environ.get("PEPCCD_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
     print("creating model and diffusion...")
 
     model, diffusion = create_model_and_diffusion(
         **args_to_dict(args, model_and_diffusion_defaults().keys())
     )
     model.to(device)
-    #model.load_state_dict(torch.load(args.pretrained_diffusion))
+    model.load_state_dict(torch.load(args.pretrained_diffusion, map_location=device), strict=False)
     schedule_sampler = create_named_schedule_sampler(args.schedule_sampler, diffusion)
 
     
@@ -71,8 +72,9 @@ def main():
 def create_argparser():
     defaults = dict(
         # path of pretrained model
-        save_dir='./checkpoints/Pre_Diffusion',
-        pretrained_diffusion='./checkpoints/Pre_Diffusion/pre_diffusion_model.pt',
+        # save_dir='./checkpoints/Pre_Diffusion', # stage 2
+        save_dir='./checkpoints/UR_PepCCD_MoE_pepflow', # stage 3
+        pretrained_diffusion='./checkpoints/Fine_Diffusion/diffusion_model.pt',
         pretrained_pep_encoder='./checkpoints/Align/best_pep.pth',
         pretrained_prot_encoder='./checkpoints/Align/best_prot.pth',
         timesteps=1000,

@@ -1,0 +1,24 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Training artifacts
+*.log
+samples/samples.txt
+
+# Large checkpoints and downloaded models
+checkpoints/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.h5
+
+# Generated datasets
+dataset/Pre_Diffusion/
+dataset/Fine_Diffusion/
+dataset/PepFlow/
+
+# Local monitor scripts and runtime files
+stage3_to_rl_monitor.log
