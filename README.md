@@ -6,10 +6,11 @@ This repository contains:
 
 - the final PRIME-aligned PPO training pipeline for diffusion
 - uncertainty-aware routing (UR)
-- sequence-level and structure-level evaluation scripts
-- reproducibility notes for end-to-end reruns
+- reproducibility notes for end-to-end training reruns
 
 For the full reproduction workflow, see [REPRODUCIBILITY.md](./REPRODUCIBILITY.md).
+
+![Framework Overall](./Framework_Overall.png)
 
 ## Environment Setup
 
@@ -60,21 +61,23 @@ Place the pre-training sequence file in:
 
 - `./dataset/Pre_Diffusion/`
 
-## Quick Start
+## Quick Start (Training Only)
 
-Run the final training + evaluation pipeline:
+Run the final PRIME-aligned PPO training pipeline:
 
 ```bash
 bash ./experiments/run_sota_candidate_prime_ppo.sh
 ```
 
-Main outputs:
+Main outputs after training:
 
 - checkpoints in `./checkpoints/UR_PepCCD_MoE/`
-- evaluation outputs in `./evaluation/pepflow_eval_ur_pepccd_sota_prime_ppo/`
+
+![PPO](./ppo.png)
 
 ## Notes
 
 - The final RL path is in `./train/rl_finetune_ppo.py`.
-- Sequence-level evaluation is in `./evaluate_pepflow.py`.
-- Optional structure evaluation is in `./evaluation/structure_eval.py`.
+- Public reproduction in this repository focuses on training only.
+
+![Router Detail](./Router_Detail.png)
