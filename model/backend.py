@@ -317,9 +317,9 @@ class ProGenBlock(nn.Module):
         
         if u_score is not None:
             ff_rob = self.mlp_robust(hidden_states)
-            # u_score 通常是 [Batch_size] 大小，需要 reshape 成 [Batch, 1, 1] 才能和 hidden_states 广播相乘
+            # Reshape u_score from [batch] to [batch, 1, 1] for broadcast.
             u_score_view = u_score.view(-1, 1, 1).to(hidden_states.device)
-            # 融合公式: (1-u)*Spec + u*Rob
+            # Fusion rule: (1 - u) * specificity + u * robustness.
             feed_forward_hidden_states = (1.0 - u_score_view) * ff_spec + u_score_view * ff_rob
         else:
             feed_forward_hidden_states = ff_spec
@@ -962,4 +962,3 @@ class FacModel(ProGenPreTrainedModel):
         outputs = self.out_head(hidden_states)
         # outputs = self.ln_f(outputs)
         return outputs
-

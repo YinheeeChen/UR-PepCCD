@@ -138,11 +138,11 @@ def main():
 
             prot_z = prot_encoder(prot).to(device)
 
-            # --- [UR-PepCCD: 计算 u_score] ---
+            # --- UR-PepCCD: compute uncertainty score and pass it to diffusion ---
             u_score = uncertainty_head(prot_z) 
-            u_score = u_score.repeat(args.batch_size, 1).to(device) # 匹配 batch_size
-            model_kwargs["u_score"] = u_score # 塞进 kwargs 里传给扩散模型
-            # --- [UR-PepCCD 结束] ---
+            u_score = u_score.repeat(args.batch_size, 1).to(device) # Match current batch size.
+            model_kwargs["u_score"] = u_score # Inject into model kwargs.
+            # --- UR-PepCCD end ---
 
             prot_z = prot_z.repeat(args.batch_size, 1).to(device)
             ref_prot = prot_z / prot_z.norm(dim=-1, keepdim=True)

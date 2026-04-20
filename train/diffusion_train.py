@@ -11,7 +11,7 @@ from utils.script_utils import (
     model_and_diffusion_defaults,
     add_dict_to_argparser,
 )
-from utils.train_util import TrainLoop
+from utils.train_util import TrainLoop, initialize_robust_mlp_from_spec
 
 def main():
 
@@ -30,6 +30,7 @@ def main():
     )
     model.to(device)
     model.load_state_dict(torch.load(args.pretrained_diffusion, map_location=device), strict=False)
+    initialize_robust_mlp_from_spec(model)
     schedule_sampler = create_named_schedule_sampler(args.schedule_sampler, diffusion)
 
     

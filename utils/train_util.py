@@ -15,19 +15,31 @@ import matplotlib.pyplot as plt
 import torch.nn as nn
 
 INITIAL_LOG_LOSS_SCALE = 20.0
+U_SCORE_TARGET = 0.25
+U_SCORE_REG_WEIGHT = 0.05
+UNCERTAINTY_HEAD_LR = 1e-5
 
 class UncertaintyHead(nn.Module):
-    def __init__(self, input_dim=640): # ESM2-150M 的输出维度通常是 320 或 640，根据实际情况确认
+    def __init__(self, input_dim=640):  # ESM hidden size is usually 320 or 640.
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(input_dim, 128),
             nn.SiLU(),
             nn.Linear(128, 1),
-            nn.Sigmoid() # 将输出压缩到 0~1 之间，完美契合概率 u
+            nn.Sigmoid()  # Output in [0, 1] for routing weight u.
         )
 
     def forward(self, x):
         return self.net(x)
+
+
+def initialize_robust_mlp_from_spec(model):
+    transformer = getattr(model, "transformer", None)
+    if transformer is None or not hasattr(transformer, "h"):
+        return
+    for block in transformer.h:
+        if hasattr(block, "mlp") and hasattr(block, "mlp_robust"):
+            block.mlp_robust.load_state_dict(block.mlp.state_dict())
 
 
 class TrainLoop:
@@ -111,7 +123,11 @@ class TrainLoop:
 
         self.uncertainty_head = UncertaintyHead(input_dim=640).to(self.device)
         self.opt.add_param_group(
-            {"params": self.uncertainty_head.parameters(), "lr": self.lr, "weight_decay": self.weight_decay}
+            {
+                "params": self.uncertainty_head.parameters(),
+                "lr": min(self.lr, UNCERTAINTY_HEAD_LR),
+                "weight_decay": self.weight_decay,
+            }
         )
 
        
@@ -169,10 +185,12 @@ class TrainLoop:
                         prot_features_norm = prot_features_norm.unsqueeze(1).repeat(1, 256, 1)  
                         micro_cond['self_condition'] = prot_features_norm
 
+            u_reg = 0.0
             if current_prot_features is not None:
-                # detach() 是为了确保梯度不会继续回传到已冻结的 ESM 编码器里报错
+                # Detach to avoid backpropagating into the frozen ESM encoder.
                 u_score = self.uncertainty_head(current_prot_features.detach())
                 micro_cond['u_score'] = u_score
+                u_reg = U_SCORE_REG_WEIGHT * (u_score.mean() - U_SCORE_TARGET) ** 2
             
             last_batch = (i + self.microbatch) >= batch.shape[0]
             t, weights = self.schedule_sampler.sample(micro.shape[0], self.device)
@@ -195,7 +213,7 @@ class TrainLoop:
                     t, losses["loss"].detach()
                 )
 
-            loss = (losses["loss"] * weights).mean()
+            loss = (losses["loss"] * weights).mean() + u_reg
 
             print(f"train_loss: {loss}")
             self.mp_trainer.backward(loss)

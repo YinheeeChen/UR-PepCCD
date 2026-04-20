@@ -1,119 +1,80 @@
-# UR-PepCCD
+# PepGUIDE (UR-PepCCD)
 
-####  Codes, datasets and appendix for AAAI-2026 paper "PepCCD: A Contrastive Conditioned Diffusion Framework for Target-Specific Peptide Generation"
+Final implementation of **PepGUIDE**, built on top of PepCCD for target-specific peptide generation.
 
-## Overview of MMCD 
+This repository contains:
 
-![model](https://github.com/ZhouYyang/PepCCD/blob/main/model.png)
+- the final PRIME-aligned PPO training pipeline for diffusion
+- uncertainty-aware routing (UR)
+- sequence-level and structure-level evaluation scripts
+- reproducibility notes for end-to-end reruns
 
-## Getting Started
-```
+For the full reproduction workflow, see [REPRODUCIBILITY.md](./REPRODUCIBILITY.md).
+
+## Environment Setup
+
+```bash
 conda env create -f environment.yml
 conda activate PepCCD
 ```
-1. ESM-2 Protein Language Model
-Visit https://huggingface.co/facebook/esm2_t30_150M_UR50D and download the entire repository folder to: path/to/PepCCD/checkpoints/ESM/
 
-2. PepCCD Checkpoints
-Vist https://huggingface.co/ZhouYyang/PepCCD/tree/main
-```
-mkdir -p /path/to/PepCCD/checkpoints/Align
-```
-Download best_pep.pthand best_prot.pth to /path/to/PepCCD/checkpoints/Align
-```
-mkdir -p /path/to/PepCCD/checkpoints/Fine_Diffusion
-```
-Download diffusion_model.pt to /path/to/PepCCD/checkpoints/Fine_Diffusion
+## Required Assets
 
-3. Pre-training Dataset
-Vist https://huggingface.co/ZhouYyang/PepCCD/tree/main
-```
-mkdir -p /path/to/PepCCD/dataset/Pre_Diffusion
-```
-Download pre_trained_sequence.json to /path/to/PepCCD/dataset/Pre_Diffusion
+### 1) ESM-2 Protein Language Model
 
-### Trian
-Before running the code, configure your Python path by adding the following lines at the beginning of your script:
-```
-import sys
-sys.path.append("/path/to/PepCCD")
-```
-Additionally, when executing scripts or modules, always use their absolute paths​ to avoid potential path-related issues during runtime.
-#### stage 1
+Download `facebook/esm2_t30_150M_UR50D` from Hugging Face:
 
-```
-python /path/to/PepCCD/train/align_train.py
+- https://huggingface.co/facebook/esm2_t30_150M_UR50D
+
+Place the full model folder at:
+
+- `./checkpoints/ESM/`
+
+### 2) PepCCD/PepGUIDE Checkpoints
+
+Original PepCCD resources are available at:
+
+- https://huggingface.co/ZhouYyang/PepCCD/tree/main
+
+Create directories:
+
+```bash
+mkdir -p ./checkpoints/Align
+mkdir -p ./checkpoints/Fine_Diffusion
 ```
 
-#### stage 2
+Then place:
 
-- Adjusting datasets in __utils.tokenizer.py__ , forward_backward in __utils.train_utils.py__ and loss function in __gaussian_diffusion.py__ for adapter.  
-```
-def load_data(encoder, seq_len, tag, args):
-    pep_tokenizer = encoder.tokenizer
-    if tag == 'train':
-        path = './dataset/Pre_Diffusion/pre_trained_sequence.jsonl'
-    ... 
-```
-```
-def forward_backward():  
-    ...  
-    if k == 'input_ids':  
-        micro_cond[k] = v[i: i + self.microbatch].to(self.device)
-    ...  
-```
-```
-def training_losses_seq2seq(self, model, x_start, t, model_kwargs=None, noise=None):  
-    ...  
-    terms["loss"] = terms["mse"]  
-    ...  
-```
-```
-python /path/to/PepCCD/train/diffusion_train.py
-```
-#### stage 3
+- `best_pep.pth` and `best_prot.pth` into `./checkpoints/Align/`
+- diffusion checkpoint(s) into `./checkpoints/Fine_Diffusion/`
 
-- Collecting Checkpoints of pre-trained DDPM.  
+### 3) Pre-training Dataset
 
-- Adjusting datasets in __utils.tokenizer.py__ , forward_backward in __utils.train_utils.py__ and loss function in __gaussian_diffusion.py__ for protein-guided fine-tuning DDPM. 
-```
-def load_data(encoder, seq_len, tag, args):
-    pep_tokenizer = encoder.tokenizer
-    if tag == 'train':
-        path = './dataset/Fine_Diffusion/fine_sequence.jsonl'
-    ... 
-```
-```
-def forward_backward():  
-    ...  
-    if k == 'input_ids':
-      micro_cond[k] = v[i: i + self.microbatch].to(self.device)      
-    else:
-      with torch.no_grad():
-            protein_sequences = v[i: i + self.microbatch]
-            decoded_sequences = [
-                self.prot_encoder.tokenizer.decode(seq, skip_special_tokens=True).replace(" ", "")
-                for seq in protein_sequences
-            ]
-            prot_features = self.prot_encoder(decoded_sequences) 
-            prot_features_norm = prot_features / prot_features.norm(dim=-1,keepdim=True) 
-            prot_features_norm = prot_features_norm.unsqueeze(1).repeat(1, 256, 1)  
-            micro_cond['self_condition'] = prot_features_norm
-  ```
-  ```
-  def training_losses_seq2seq(self, model, x_start, t, model_kwargs=None, noise=None):  
-     terms["loss"] = terms["mse"] + decoder_nll  
-  
-  ```
-  ```
-  python /path/to/PepCCD/train/diffusion_train.py
-  ```
-### Sample
+From the same Hugging Face page above, prepare:
 
-Adjusting target_protein in __sampling.py__
-
-target_protein = ['your target_protein sequence']
-
+```bash
+mkdir -p ./dataset/Pre_Diffusion
 ```
-python /path/to/PepCCD/samples/sampling.py
+
+Place the pre-training sequence file in:
+
+- `./dataset/Pre_Diffusion/`
+
+## Quick Start
+
+Run the final training + evaluation pipeline:
+
+```bash
+bash ./experiments/run_sota_candidate_prime_ppo.sh
 ```
+
+Main outputs:
+
+- checkpoints in `./checkpoints/UR_PepCCD_MoE/`
+- evaluation outputs in `./evaluation/pepflow_eval_ur_pepccd_sota_prime_ppo/`
+
+## Notes
+
+- The final RL path is in `./train/rl_finetune_ppo.py`.
+- Sequence-level evaluation is in `./evaluate_pepflow.py`.
+- Optional structure evaluation is in `./evaluation/structure_eval.py`.
