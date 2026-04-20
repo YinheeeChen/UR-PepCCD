@@ -1,4 +1,4 @@
-# PepGUIDE (UR-PepCCD)
+# PepGUIDE
 
 Final implementation of **PepGUIDE**, built on top of PepCCD for target-specific peptide generation.
 
