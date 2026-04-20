@@ -84,39 +84,8 @@ Main outputs:
 - Evaluation directory:
   - `./evaluation/pepflow_eval_ur_pepccd_sota_prime_ppo/`
 
-## 5. Optional: Structure-Level Evaluation
 
-If you want structure metrics (`ipTM`, `RT-score`, structure similarity), run structure evaluation on generated candidates:
-
-```bash
-python ./evaluation/structure_eval.py \
-  --summary_json ./evaluation/pepflow_eval_ur_pepccd_sota_prime_ppo/summary.json \
-  --per_target_csv ./evaluation/pepflow_eval_ur_pepccd_sota_prime_ppo/per_target_metrics.csv \
-  --generated_csv ./evaluation/pepflow_eval_ur_pepccd_sota_prime_ppo/generated_peptides.csv \
-  --test_csv ./dataset/PepFlow/pepflow_test.csv \
-  --output_dir ./evaluation/pepflow_eval_ur_pepccd_sota_prime_ppo
-```
-
-Notes:
-
-- Structure evaluation is significantly slower than sequence-level evaluation.
-- RT-score in this repo is computed after Rosetta minimization and should be on a comparable negative scale.
-
-## 6. Build Summary Tables
-
-Generate markdown tables used in reporting:
-
-```bash
-python ./evaluation/build_master_table.py
-python ./evaluation/build_paper_metrics_table.py
-```
-
-Outputs:
-
-- `./evaluation/master_ablation_table.md`
-- `./evaluation/paper_metrics_table.md`
-
-## 7. Core Method Files
+## 5. Core Method Files
 
 The final method implementation is primarily in:
 
@@ -124,7 +93,7 @@ The final method implementation is primarily in:
 - `./evaluate_pepflow.py`
 - `./model/backend.py`
 
-## 8. Reproducibility Tips
+## 6. Reproducibility Tips
 
 - Keep `random_state` fixed where provided.
 - Use the same GPU device and checkpoint paths as the training script.
